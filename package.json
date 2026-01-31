@@ -1,0 +1,35 @@
+{
+  "name": "street-food-map",
+  "version": "1.0.0",
+  "description": "Data ingestion pipeline for extracting street food vendor info from YouTube food vlogs",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "youtube",
+    "street-food",
+    "india",
+    "food-vlog",
+    "data-pipeline"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "googleapis": "^144.0.0",
+    "winston": "^3.17.0",
+    "youtube-transcript": "^1.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0"
+  }
+}
