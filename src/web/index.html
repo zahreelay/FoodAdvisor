@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Street Food India - Discover Authentic Street Food Across India</title>
+  <meta name="description" content="Explore the best street food spots across India. From Delhi's chaat to Mumbai's vada pav, discover authentic local flavors.">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <a href="/" class="logo">
+        <span class="logo-icon">🍛</span>
+        <span class="logo-text">Street Food India</span>
+      </a>
+      <nav class="nav">
+        <a href="/" class="nav-link active">Home</a>
+        <a href="/dishes.html" class="nav-link">Dishes</a>
+        <a href="#cities" class="nav-link">Cities</a>
+        <a href="/personal.html" class="nav-link">My Places</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <h1>Discover India's Best Street Food</h1>
+        <p class="hero-subtitle">Explore authentic street food experiences across India's vibrant cities</p>
+        <div class="stats-bar">
+          <div class="stat">
+            <span class="stat-number" id="total-cities">0</span>
+            <span class="stat-label">Cities</span>
+          </div>
+          <div class="stat">
+            <span class="stat-number" id="total-places">0</span>
+            <span class="stat-label">Places</span>
+          </div>
+          <div class="stat">
+            <span class="stat-number" id="total-cuisines">12+</span>
+            <span class="stat-label">Cuisines</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="map-section">
+      <div class="container">
+        <h2>Explore by City</h2>
+        <p class="section-subtitle">Click on a city marker to explore its street food scene</p>
+        <div id="india-map" class="map-container"></div>
+      </div>
+    </section>
+
+    <section class="dish-mode-banner">
+      <div class="container">
+        <div class="dish-mode-banner-content">
+          <div class="dish-mode-banner-text">
+            <h2>Craving something specific?</h2>
+            <p>Search by dish — find every place that serves your favourite street food across India.</p>
+          </div>
+          <a href="/dishes.html" class="btn btn-primary dish-mode-btn">Browse by Dish</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="cities" class="cities-section">
+      <div class="container">
+        <h2>Popular Cities</h2>
+        <div class="cities-grid" id="cities-grid">
+          <!-- Cities will be loaded dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <section id="about" class="about-section">
+      <div class="container">
+        <h2>About Street Food India</h2>
+        <div class="about-content">
+          <p>
+            Street Food India is your ultimate guide to discovering authentic street food experiences across the country.
+            From the spicy chaats of Delhi to the coastal flavors of Mumbai, we've curated the best spots for you to explore.
+          </p>
+          <p>
+            Our platform features honest reviews, detailed information about each food spot, and user ratings to help you
+            find your next culinary adventure. Whether you're a local foodie or a traveler exploring India's diverse cuisine,
+            we've got you covered.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2024 Street Food India. Made with ❤️ for food lovers.</p>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script type="module" src="./scripts/home.ts"></script>
+</body>
+</html>

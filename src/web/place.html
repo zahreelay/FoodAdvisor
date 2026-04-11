@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Place - Street Food India</title>
+  <meta name="description" content="Street food spot details">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <a href="/" class="logo">
+        <span class="logo-icon">🍛</span>
+        <span class="logo-text">Street Food India</span>
+      </a>
+      <nav class="nav">
+        <a href="/" class="nav-link">Home</a>
+        <a href="/dishes.html" class="nav-link">Dishes</a>
+        <a href="/#cities" class="nav-link">Cities</a>
+        <a href="/personal.html" class="nav-link">My Places</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="place-hero">
+      <div class="container">
+        <nav class="breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="#" id="breadcrumb-city-link">City</a>
+          <span>/</span>
+          <span id="breadcrumb-place">Place</span>
+        </nav>
+        <h1 id="place-name">Loading...</h1>
+        <div class="place-meta">
+          <span class="place-city" id="place-city"></span>
+          <span class="place-price" id="place-price"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="place-content">
+      <div class="container">
+        <div class="place-layout">
+          <div class="place-main">
+
+            <div class="social-actions" id="social-actions">
+              <button class="social-btn like-btn" id="like-btn" title="Like this place">
+                <span class="social-icon" id="like-icon">♡</span>
+                <span id="like-count">0</span>
+              </button>
+              <button class="social-btn bookmark-btn" id="bookmark-btn" title="Save to bookmarks">
+                <span class="social-icon" id="bookmark-icon">🔖</span>
+                <span id="bookmark-label">Save</span>
+                <span id="bookmark-count"></span>
+              </button>
+              <div class="share-wrapper" id="share-wrapper">
+                <button class="social-btn share-btn" id="share-btn" title="Share this place">
+                  <span class="social-icon">↗</span>
+                  <span>Share</span>
+                </button>
+                <div class="share-dropdown hidden" id="share-dropdown">
+                  <a class="share-option" id="share-twitter" href="#" target="_blank" rel="noopener noreferrer">
+                    <span class="share-option-icon">𝕏</span> Twitter / X
+                  </a>
+                  <a class="share-option" id="share-whatsapp" href="#" target="_blank" rel="noopener noreferrer">
+                    <span class="share-option-icon">💬</span> WhatsApp
+                  </a>
+                  <button class="share-option" id="share-instagram">
+                    <span class="share-option-icon">📷</span> Instagram
+                  </button>
+                  <button class="share-option" id="share-copy">
+                    <span class="share-option-icon">🔗</span> Copy Link
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="place-images" id="place-images">
+              <div class="image-placeholder">
+                <span>📷</span>
+                <p>No images available</p>
+              </div>
+            </div>
+
+            <div class="place-description" id="place-description-section">
+              <p id="place-description"></p>
+            </div>
+
+            <div class="place-details">
+              <div class="detail-section">
+                <h3>Address</h3>
+                <p id="place-address">-</p>
+              </div>
+              <div class="detail-section">
+                <h3>Cuisine</h3>
+                <div class="tags" id="place-cuisine"></div>
+              </div>
+              <div class="detail-section">
+                <h3>Popular Dishes</h3>
+                <div class="tags" id="place-dishes"></div>
+              </div>
+            </div>
+
+            <div class="place-map-section">
+              <h3>Location</h3>
+              <div id="place-map" class="place-map-container"></div>
+            </div>
+
+          </div>
+
+          <div class="place-sidebar">
+            <div class="sidebar-section">
+              <h3>Similar Places</h3>
+              <div id="similar-places" class="similar-places-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2024 Street Food India. Made with ❤️ for food lovers.</p>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script type="module" src="./scripts/place.ts"></script>
+</body>
+</html>

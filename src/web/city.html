@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>City - Street Food India</title>
+  <meta name="description" content="Explore street food spots in this city">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <a href="/" class="logo">
+        <span class="logo-icon">🍛</span>
+        <span class="logo-text">Street Food India</span>
+      </a>
+      <nav class="nav">
+        <a href="/" class="nav-link">Home</a>
+        <a href="/dishes.html" class="nav-link">Dishes</a>
+        <a href="/#cities" class="nav-link">Cities</a>
+        <a href="/personal.html" class="nav-link">My Places</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="city-hero">
+      <div class="container">
+        <nav class="breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <span id="breadcrumb-city">City</span>
+        </nav>
+        <h1 id="city-name">Loading...</h1>
+        <p class="city-state" id="city-state"></p>
+        <div class="city-stats">
+          <div class="stat">
+            <span class="stat-number" id="city-place-count">0</span>
+            <span class="stat-label">Places</span>
+          </div>
+          <div class="stat">
+            <span class="stat-number" id="city-cuisine-count">0</span>
+            <span class="stat-label">Cuisines</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="city-map-section">
+      <div class="container">
+        <div id="city-map" class="city-map-container"></div>
+      </div>
+    </section>
+
+    <section class="filters-section">
+      <div class="container">
+        <div class="filters">
+          <div class="filter-group">
+            <label for="cuisine-filter">Cuisine:</label>
+            <select id="cuisine-filter">
+              <option value="">All Cuisines</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="sort-by">Sort by:</label>
+            <select id="sort-by">
+              <option value="name">Name</option>
+              <option value="rating">Rating</option>
+              <option value="price-low">Price: Low to High</option>
+              <option value="price-high">Price: High to Low</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="places-section">
+      <div class="container">
+        <div class="places-grid" id="places-grid">
+          <!-- Places will be loaded dynamically -->
+        </div>
+        <div class="no-results" id="no-results" style="display: none;">
+          <p>No places found matching your filters.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2024 Street Food India. Made with ❤️ for food lovers.</p>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script type="module" src="./scripts/city.ts"></script>
+</body>
+</html>

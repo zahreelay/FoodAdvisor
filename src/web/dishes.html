@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discover by Dish - Street Food India</title>
+  <meta name="description" content="Find the best places to eat your favourite Indian street food dishes — samosa, dosa, biryani and more.">
+  <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <a href="/" class="logo">
+        <span class="logo-icon">🍛</span>
+        <span class="logo-text">Street Food India</span>
+      </a>
+      <nav class="nav">
+        <a href="/" class="nav-link">Home</a>
+        <a href="/dishes.html" class="nav-link active">Dishes</a>
+        <a href="/#cities" class="nav-link">Cities</a>
+        <a href="/personal.html" class="nav-link">My Places</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="dishes-hero">
+      <div class="container">
+        <h1>Find Your Favourite Dish</h1>
+        <p class="hero-subtitle">Browse by dish — see every place that serves it across India</p>
+        <div class="dish-search-bar">
+          <input
+            type="text"
+            id="dish-search"
+            class="dish-search-input"
+            placeholder="Search dishes..."
+            autocomplete="off"
+          >
+        </div>
+      </div>
+    </section>
+
+    <section class="dishes-gallery-section">
+      <div class="container">
+        <div class="dishes-grid" id="dishes-grid">
+          <!-- Dish cards loaded dynamically -->
+        </div>
+        <p class="no-results hidden" id="no-dishes">No dishes found matching your search.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2024 Street Food India. Made with ❤️ for food lovers.</p>
+    </div>
+  </footer>
+
+  <script type="module" src="./scripts/dishes.ts"></script>
+</body>
+</html>

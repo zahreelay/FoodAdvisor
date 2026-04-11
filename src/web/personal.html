@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Places - Street Food India</title>
+  <meta name="description" content="Your liked and saved street food spots">
+  <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <a href="/" class="logo">
+        <span class="logo-icon">🍛</span>
+        <span class="logo-text">Street Food India</span>
+      </a>
+      <nav class="nav">
+        <a href="/" class="nav-link">Home</a>
+        <a href="/dishes.html" class="nav-link">Dishes</a>
+        <a href="/#cities" class="nav-link">Cities</a>
+        <a href="/personal.html" class="nav-link active">My Places</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="personal-hero">
+      <div class="container">
+        <h1>My Places</h1>
+        <p class="hero-subtitle">Your liked and saved street food spots</p>
+      </div>
+    </section>
+
+    <div class="personal-tabs-bar">
+      <div class="container">
+        <button class="personal-tab active" data-tab="likes">
+          ♥ Likes <span class="tab-count" id="likes-count">0</span>
+        </button>
+        <button class="personal-tab" data-tab="bookmarks">
+          🔖 Saved <span class="tab-count" id="bookmarks-count">0</span>
+        </button>
+      </div>
+    </div>
+
+    <section class="personal-content">
+      <div class="container">
+
+        <div class="tab-panel" id="tab-likes">
+          <div class="places-grid" id="likes-grid"></div>
+          <div class="personal-empty hidden" id="likes-empty">
+            <div class="personal-empty-icon">♡</div>
+            <h3>No liked places yet</h3>
+            <p>Tap the heart on any place page to save it here.</p>
+            <a href="/" class="btn btn-primary">Explore places</a>
+          </div>
+        </div>
+
+        <div class="tab-panel hidden" id="tab-bookmarks">
+          <div class="places-grid" id="bookmarks-grid"></div>
+          <div class="personal-empty hidden" id="bookmarks-empty">
+            <div class="personal-empty-icon">🔖</div>
+            <h3>No saved places yet</h3>
+            <p>Tap Save on any place page to bookmark it here.</p>
+            <a href="/" class="btn btn-primary">Explore places</a>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2024 Street Food India. Made with ❤️ for food lovers.</p>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="./scripts/personal.ts"></script>
+</body>
+</html>

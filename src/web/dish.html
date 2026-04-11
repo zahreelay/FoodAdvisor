@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dish - Street Food India</title>
+  <meta name="description" content="Find the best places serving this dish across India">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <a href="/" class="logo">
+        <span class="logo-icon">🍛</span>
+        <span class="logo-text">Street Food India</span>
+      </a>
+      <nav class="nav">
+        <a href="/" class="nav-link">Home</a>
+        <a href="/dishes.html" class="nav-link active">Dishes</a>
+        <a href="/#cities" class="nav-link">Cities</a>
+        <a href="/personal.html" class="nav-link">My Places</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="dish-hero">
+      <div class="container">
+        <nav class="breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/dishes.html">Dishes</a>
+          <span>/</span>
+          <span id="dish-breadcrumb">Loading...</span>
+        </nav>
+        <div class="dish-hero-content">
+          <span class="dish-emoji-large" id="dish-emoji">🍽️</span>
+          <div>
+            <h1 id="dish-name">Loading...</h1>
+            <p class="hero-subtitle" id="dish-tagline"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="dish-filters-bar">
+      <div class="container">
+        <div class="dish-filter-group">
+          <span class="filter-label">City</span>
+          <div class="city-filter-buttons" id="city-filters">
+            <!-- City buttons loaded dynamically -->
+          </div>
+        </div>
+        <div class="dish-filter-group">
+          <span class="filter-label">Sort</span>
+          <select id="sort-select" class="sort-select">
+            <option value="rating">Top Rated</option>
+            <option value="price-asc">Price: Low to High</option>
+            <option value="price-desc">Price: High to Low</option>
+            <option value="name">Name A–Z</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <section class="dish-map-section">
+      <div class="container">
+        <div id="dish-map" class="map-container dish-map"></div>
+      </div>
+    </section>
+
+    <section class="places-section">
+      <div class="container">
+        <p class="results-count" id="results-count"></p>
+        <div class="places-grid" id="places-grid">
+          <!-- Places loaded dynamically -->
+        </div>
+        <p class="no-results hidden" id="no-places">No places found for this dish in the selected city.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2024 Street Food India. Made with ❤️ for food lovers.</p>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script type="module" src="./scripts/dish.ts"></script>
+</body>
+</html>
