@@ -19,7 +19,8 @@
     "web:dev": "npm run copy-data && vite --config src/web/vite.config.ts",
     "web:build": "npm run copy-data && vite build --config src/web/vite.config.ts",
     "web:preview": "vite preview --config src/web/vite.config.ts",
-    "copy-data": "node scripts/copy-data.js"
+    "copy-data": "node scripts/copy-data.js",
+    "seed-db": "node scripts/seed-db.js"
   },
   "keywords": [
     "youtube",
