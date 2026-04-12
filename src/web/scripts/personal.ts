@@ -1,22 +1,20 @@
 /**
- * Personal page — liked and bookmarked places.
+ * Personal page — liked and bookmarked places, backed by Supabase.
  */
 
+import { loadPlaces, type Place } from "./data";
 import {
-  loadPlaces,
-  initSocialData,
   getMyLikedIds,
   getMyBookmarkedIds,
-  getLikeCount,
-  getBookmarkCount,
-  hasLiked,
-  hasBookmarked,
+  fetchLikeCounts,
   toggleLike,
   toggleBookmark,
-  type Place,
-} from "./data";
+} from "./db";
 
 let allPlaces: Place[] = [];
+let myLikedIds: Set<string> = new Set();
+let myBookmarkedIds: Set<string> = new Set();
+let likeCounts: Record<string, number> = {};
 
 function showToast(message: string): void {
   const toast = document.getElementById("toast")!;
@@ -25,10 +23,14 @@ function showToast(message: string): void {
   setTimeout(() => toast.classList.remove("show"), 2500);
 }
 
+function getPlaceById(id: string): Place | undefined {
+  return allPlaces.find((p) => p.id === id);
+}
+
 function renderPlaceCard(place: Place, mode: "likes" | "bookmarks"): string {
-  const likes = getLikeCount(place.id);
-  const isLiked = hasLiked(place.id);
-  const isBookmarked = hasBookmarked(place.id);
+  const likes = likeCounts[place.id] ?? 0;
+  const isLiked = myLikedIds.has(place.id);
+  const isBookmarked = myBookmarkedIds.has(place.id);
 
   return `
     <div class="place-card personal-card" data-id="${place.id}" data-mode="${mode}">
@@ -49,27 +51,23 @@ function renderPlaceCard(place: Place, mode: "likes" | "bookmarks"): string {
             .join("")}
         </div>
         <div class="personal-card-actions">
-          <button class="personal-action-btn like-action-btn ${isLiked ? "active" : ""}" data-id="${place.id}" title="${isLiked ? "Unlike" : "Like"}">
-            ${isLiked ? "♥" : "♡"} ${isLiked ? "Liked" : "Like"}
+          <button class="personal-action-btn like-action-btn ${isLiked ? "active" : ""}" data-id="${place.id}">
+            ${isLiked ? "♥ Liked" : "♡ Like"}
           </button>
-          <button class="personal-action-btn bookmark-action-btn ${isBookmarked ? "active" : ""}" data-id="${place.id}" title="${isBookmarked ? "Unsave" : "Save"}">
+          <button class="personal-action-btn bookmark-action-btn ${isBookmarked ? "active" : ""}" data-id="${place.id}">
             ${isBookmarked ? "★ Saved" : "🔖 Save"}
           </button>
         </div>
       </div>
-    </div>
-  `;
-}
-
-function getPlacesForIds(ids: string[]): Place[] {
-  return ids
-    .map((id) => allPlaces.find((p) => p.id === id))
-    .filter((p): p is Place => p !== undefined);
+    </div>`;
 }
 
 function renderTab(tab: "likes" | "bookmarks"): void {
-  const ids = tab === "likes" ? getMyLikedIds() : getMyBookmarkedIds();
-  const places = getPlacesForIds(ids);
+  const ids = [...(tab === "likes" ? myLikedIds : myBookmarkedIds)];
+  const places = ids
+    .map((id) => getPlaceById(id))
+    .filter((p): p is Place => p !== undefined);
+
   const grid = document.getElementById(`${tab}-grid`)!;
   const empty = document.getElementById(`${tab}-empty`)!;
   const countEl = document.getElementById(`${tab}-count`)!;
@@ -86,25 +84,20 @@ function renderTab(tab: "likes" | "bookmarks"): void {
 }
 
 function setupTabSwitching(): void {
-  const tabs = document.querySelectorAll<HTMLButtonElement>(".personal-tab");
-  tabs.forEach((tab) => {
+  document.querySelectorAll<HTMLButtonElement>(".personal-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
-      tabs.forEach((t) => t.classList.remove("active"));
+      document.querySelectorAll(".personal-tab").forEach((t) => t.classList.remove("active"));
       tab.classList.add("active");
-
       const target = tab.dataset.tab as "likes" | "bookmarks";
-      document
-        .querySelectorAll(".tab-panel")
-        .forEach((p) => p.classList.add("hidden"));
+      document.querySelectorAll(".tab-panel").forEach((p) => p.classList.add("hidden"));
       document.getElementById(`tab-${target}`)!.classList.remove("hidden");
     });
   });
 }
 
 function setupCardActions(): void {
-  // Event delegation on both grids
-  ["likes-grid", "bookmarks-grid"].forEach((gridId) => {
-    document.getElementById(gridId)!.addEventListener("click", (e) => {
+  const handleGrid = (gridId: string) => {
+    document.getElementById(gridId)!.addEventListener("click", async (e) => {
       const btn = (e.target as HTMLElement).closest("button[data-id]") as HTMLButtonElement | null;
       if (!btn) return;
 
@@ -113,36 +106,87 @@ function setupCardActions(): void {
       const mode = card.dataset.mode as "likes" | "bookmarks";
 
       if (btn.classList.contains("like-action-btn")) {
-        const { liked } = toggleLike(placeId);
-        showToast(liked ? "Added to likes" : "Removed from likes");
-        // Re-render the tab that owns this card so removed items disappear
-        if (!liked && mode === "likes") {
-          renderTab("likes");
-        } else {
+        const wasLiked = myLikedIds.has(placeId);
+        // Optimistic update
+        if (wasLiked) myLikedIds.delete(placeId);
+        else myLikedIds.add(placeId);
+        renderTab("likes");
+        renderTab("bookmarks");
+        showToast(wasLiked ? "Removed from likes" : "Added to likes");
+
+        try {
+          const { liked, count } = await toggleLike(placeId, wasLiked);
+          likeCounts[placeId] = count;
+          if (liked) myLikedIds.add(placeId);
+          else myLikedIds.delete(placeId);
           renderTab("likes");
           renderTab("bookmarks");
+        } catch {
+          // Revert
+          if (wasLiked) myLikedIds.add(placeId);
+          else myLikedIds.delete(placeId);
+          renderTab("likes");
+          renderTab("bookmarks");
+          showToast("Failed to update — please try again");
         }
       }
 
       if (btn.classList.contains("bookmark-action-btn")) {
-        const { bookmarked } = toggleBookmark(placeId);
-        showToast(bookmarked ? "Saved to bookmarks" : "Removed from bookmarks");
-        if (!bookmarked && mode === "bookmarks") {
-          renderTab("bookmarks");
-        } else {
+        const wasBookmarked = myBookmarkedIds.has(placeId);
+        if (wasBookmarked) myBookmarkedIds.delete(placeId);
+        else myBookmarkedIds.add(placeId);
+        renderTab("likes");
+        renderTab("bookmarks");
+        showToast(wasBookmarked ? "Removed from bookmarks" : "Saved to bookmarks");
+
+        try {
+          const { bookmarked, count } = await toggleBookmark(placeId, wasBookmarked);
+          if (bookmarked) myBookmarkedIds.add(placeId);
+          else myBookmarkedIds.delete(placeId);
           renderTab("likes");
           renderTab("bookmarks");
+        } catch {
+          if (wasBookmarked) myBookmarkedIds.add(placeId);
+          else myBookmarkedIds.delete(placeId);
+          renderTab("likes");
+          renderTab("bookmarks");
+          showToast("Failed to update — please try again");
         }
       }
+
+      void mode; // used via data attribute above
     });
+  };
+
+  handleGrid("likes-grid");
+  handleGrid("bookmarks-grid");
+}
+
+function showLoading(): void {
+  ["likes-grid", "bookmarks-grid"].forEach((id) => {
+    document.getElementById(id)!.innerHTML =
+      '<p class="loading-text">Loading...</p>';
   });
 }
 
 async function init(): Promise<void> {
-  initSocialData();
+  showLoading();
 
-  const data = await loadPlaces();
-  allPlaces = data.places;
+  const [placesData, likedIds, bookmarkedIds] = await Promise.all([
+    loadPlaces(),
+    getMyLikedIds(),
+    getMyBookmarkedIds(),
+  ]);
+
+  allPlaces = placesData.places;
+  myLikedIds = new Set(likedIds);
+  myBookmarkedIds = new Set(bookmarkedIds);
+
+  // Batch fetch like counts for all relevant places
+  const allIds = [...new Set([...likedIds, ...bookmarkedIds])];
+  if (allIds.length > 0) {
+    likeCounts = await fetchLikeCounts(allIds);
+  }
 
   renderTab("likes");
   renderTab("bookmarks");

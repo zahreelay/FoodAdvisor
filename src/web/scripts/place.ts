@@ -1,26 +1,24 @@
 /**
- * Place page script - displays individual food place details.
+ * Place page script.
  */
 
 import {
   getPlaceBySlug,
   getCityBySlug,
   getSimilarPlaces,
-  getLikeCount,
-  hasLiked,
-  toggleLike,
-  getBookmarkCount,
-  hasBookmarked,
-  toggleBookmark,
-  initSocialData,
   getUrlParam,
   type Place,
 } from "./data";
 
+import {
+  fetchPlaceSocial,
+  toggleLike,
+  toggleBookmark,
+} from "./db";
+
 declare const L: typeof import("leaflet");
 
 let map: L.Map | null = null;
-let currentPlace: Place | null = null;
 
 function initMap(place: Place): void {
   const mapContainer = document.getElementById("place-map");
@@ -30,7 +28,6 @@ function initMap(place: Place): void {
     [place.coordinates.lat, place.coordinates.lng],
     15
   );
-
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -39,14 +36,7 @@ function initMap(place: Place): void {
   L.marker([place.coordinates.lat, place.coordinates.lng], {
     icon: L.divIcon({
       className: "place-marker",
-      html: `<div style="
-        background: #e65100;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        border: 3px solid white;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-      "></div>`,
+      html: `<div style="background:#e65100;width:20px;height:20px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>`,
       iconSize: [20, 20],
       iconAnchor: [10, 10],
     }),
@@ -68,40 +58,33 @@ function updatePageContent(place: Place, cityName: string): void {
   const breadcrumbPlace = document.getElementById("breadcrumb-place");
   if (breadcrumbPlace) breadcrumbPlace.textContent = place.name;
 
-  const placeName = document.getElementById("place-name");
-  const placeCity = document.getElementById("place-city");
-  const placePrice = document.getElementById("place-price");
-  if (placeName) placeName.textContent = place.name;
-  if (placeCity) placeCity.textContent = place.city;
-  if (placePrice) placePrice.textContent = place.priceRange;
+  (document.getElementById("place-name") as HTMLElement).textContent = place.name;
+  (document.getElementById("place-city") as HTMLElement).textContent = place.city;
+  (document.getElementById("place-price") as HTMLElement).textContent = place.priceRange;
 
-  const placeDescription = document.getElementById("place-description");
-  const placeDescriptionSection = document.getElementById("place-description-section");
-  if (placeDescription && placeDescriptionSection) {
+  const descSection = document.getElementById("place-description-section");
+  const descEl = document.getElementById("place-description");
+  if (descSection && descEl) {
     if (place.description) {
-      placeDescription.textContent = place.description;
+      descEl.textContent = place.description;
     } else {
-      placeDescriptionSection.style.display = "none";
+      descSection.style.display = "none";
     }
   }
 
-  const placeAddress = document.getElementById("place-address");
-  if (placeAddress) placeAddress.textContent = place.address || "Address not available";
+  const addr = document.getElementById("place-address");
+  if (addr) addr.textContent = place.address || "Address not available";
 
-  const placeCuisine = document.getElementById("place-cuisine");
-  if (placeCuisine) {
-    placeCuisine.innerHTML = place.cuisine
-      .map((c) => `<span class="tag">${c}</span>`)
-      .join("");
-  }
+  const cuisineEl = document.getElementById("place-cuisine");
+  if (cuisineEl)
+    cuisineEl.innerHTML = place.cuisine.map((c) => `<span class="tag">${c}</span>`).join("");
 
-  const placeDishes = document.getElementById("place-dishes");
-  if (placeDishes) {
-    placeDishes.innerHTML =
+  const dishesEl = document.getElementById("place-dishes");
+  if (dishesEl)
+    dishesEl.innerHTML =
       place.dishes.length > 0
         ? place.dishes.map((d) => `<span class="tag">${d}</span>`).join("")
         : "<span>No dishes listed</span>";
-  }
 }
 
 function showToast(message: string): void {
@@ -111,17 +94,15 @@ function showToast(message: string): void {
   setTimeout(() => toast.classList.remove("show"), 2500);
 }
 
-function setupSocialActions(place: Place): void {
+async function setupSocialActions(place: Place): Promise<void> {
   const likeBtn = document.getElementById("like-btn")!;
   const likeIcon = document.getElementById("like-icon")!;
   const likeCountEl = document.getElementById("like-count")!;
-
   const bookmarkBtn = document.getElementById("bookmark-btn")!;
   const bookmarkIcon = document.getElementById("bookmark-icon")!;
   const bookmarkLabel = document.getElementById("bookmark-label")!;
   const bookmarkCountEl = document.getElementById("bookmark-count")!;
-
-  const shareBtn = document.getElementById("share-btn")!;
+  const shareBtn = document.getElementById("share-btn") as HTMLButtonElement;
 
   function updateLikeUI(count: number, liked: boolean): void {
     likeIcon.textContent = liked ? "♥" : "♡";
@@ -135,25 +116,71 @@ function setupSocialActions(place: Place): void {
     bookmarkLabel.textContent = bookmarked ? "Saved" : "Save";
     bookmarkCountEl.textContent = count > 0 ? ` · ${count}` : "";
     bookmarkBtn.classList.toggle("active", bookmarked);
-    bookmarkBtn.title = bookmarked ? "Remove bookmark" : "Save to bookmarks";
   }
 
-  // Set initial state
-  updateLikeUI(getLikeCount(place.id), hasLiked(place.id));
-  updateBookmarkUI(getBookmarkCount(place.id), hasBookmarked(place.id));
+  // Track current state for optimistic updates
+  let liked = false;
+  let likeCount = 0;
+  let bookmarked = false;
+  let bookmarkCount = 0;
 
-  likeBtn.addEventListener("click", () => {
-    const { count, liked } = toggleLike(place.id);
-    updateLikeUI(count, liked);
-    showToast(liked ? "Added to your likes" : "Removed from likes");
+  // Load real state from DB
+  try {
+    const social = await fetchPlaceSocial(place.id);
+    liked = social.liked;
+    likeCount = social.likeCount;
+    bookmarked = social.bookmarked;
+    bookmarkCount = social.bookmarkCount;
+    updateLikeUI(likeCount, liked);
+    updateBookmarkUI(bookmarkCount, bookmarked);
+  } catch (err) {
+    console.error("Failed to load social data:", err);
+  }
+
+  // Like toggle with optimistic UI
+  likeBtn.addEventListener("click", async () => {
+    const wasLiked = liked;
+    liked = !wasLiked;
+    likeCount += liked ? 1 : -1;
+    updateLikeUI(likeCount, liked);
+    showToast(liked ? "Added to likes" : "Removed from likes");
+
+    try {
+      const result = await toggleLike(place.id, wasLiked);
+      liked = result.liked;
+      likeCount = result.count;
+      updateLikeUI(likeCount, liked);
+    } catch {
+      // Revert
+      liked = wasLiked;
+      likeCount += liked ? 1 : -1;
+      updateLikeUI(likeCount, liked);
+      showToast("Failed to update — please try again");
+    }
   });
 
-  bookmarkBtn.addEventListener("click", () => {
-    const { count, bookmarked } = toggleBookmark(place.id);
-    updateBookmarkUI(count, bookmarked);
+  // Bookmark toggle with optimistic UI
+  bookmarkBtn.addEventListener("click", async () => {
+    const wasBookmarked = bookmarked;
+    bookmarked = !wasBookmarked;
+    bookmarkCount += bookmarked ? 1 : -1;
+    updateBookmarkUI(bookmarkCount, bookmarked);
     showToast(bookmarked ? "Saved to bookmarks" : "Removed from bookmarks");
+
+    try {
+      const result = await toggleBookmark(place.id, wasBookmarked);
+      bookmarked = result.bookmarked;
+      bookmarkCount = result.count;
+      updateBookmarkUI(bookmarkCount, bookmarked);
+    } catch {
+      bookmarked = wasBookmarked;
+      bookmarkCount += bookmarked ? 1 : -1;
+      updateBookmarkUI(bookmarkCount, bookmarked);
+      showToast("Failed to update — please try again");
+    }
   });
 
+  // Share dropdown
   const url = `${window.location.origin}/place.html?place=${place.slug}`;
   const shareText = `Check out ${place.name} in ${place.city}!`;
   const dropdown = document.getElementById("share-dropdown")!;
@@ -162,7 +189,6 @@ function setupSocialActions(place: Place): void {
     e.stopPropagation();
     dropdown.classList.toggle("hidden");
   });
-
   document.addEventListener("click", () => dropdown.classList.add("hidden"));
   dropdown.addEventListener("click", (e) => e.stopPropagation());
 
@@ -188,63 +214,44 @@ function setupSocialActions(place: Place): void {
 async function renderSimilarPlaces(place: Place): Promise<void> {
   const container = document.getElementById("similar-places");
   if (!container) return;
-
   const similar = await getSimilarPlaces(place, 5);
-
-  if (similar.length === 0) {
-    container.innerHTML = "<p>No similar places found.</p>";
-    return;
-  }
-
+  if (similar.length === 0) { container.innerHTML = "<p>No similar places found.</p>"; return; }
   container.innerHTML = similar
-    .map(
-      (p) => `
+    .map((p) => `
       <a href="/place.html?place=${p.slug}" class="similar-place">
         <div class="similar-place-info">
           <h4>${p.name}</h4>
           <div class="similar-place-meta">${p.city} · ${p.priceRange}</div>
         </div>
-      </a>
-    `
-    )
+      </a>`)
     .join("");
 }
 
 function showNotFound(): void {
-  const placeName = document.getElementById("place-name");
-  if (placeName) placeName.textContent = "Place Not Found";
-
+  const el = document.getElementById("place-name");
+  if (el) el.textContent = "Place Not Found";
   const content = document.querySelector(".place-content");
-  if (content) {
-    content.innerHTML = `
-      <div class="container">
-        <div class="no-results">
-          <p>The place you're looking for doesn't exist.</p>
-          <p><a href="/">Go back to homepage</a></p>
-        </div>
-      </div>
-    `;
-  }
+  if (content)
+    content.innerHTML = `<div class="container"><div class="no-results"><p>The place you're looking for doesn't exist.</p><p><a href="/">Go back to homepage</a></p></div></div>`;
 }
 
 async function init(): Promise<void> {
-  initSocialData();
-
   const placeSlug = getUrlParam("place");
   if (!placeSlug) { showNotFound(); return; }
 
   const place = await getPlaceBySlug(placeSlug);
   if (!place) { showNotFound(); return; }
 
-  currentPlace = place;
-
   const city = await getCityBySlug(place.citySlug);
   updatePageContent(place, city?.name || place.city);
 
   if (place.coordinates) initMap(place);
 
-  setupSocialActions(place);
-  await renderSimilarPlaces(place);
+  // Social and similar load in parallel; social is async
+  await Promise.all([
+    setupSocialActions(place),
+    renderSimilarPlaces(place),
+  ]);
 }
 
 if (document.readyState === "loading") {

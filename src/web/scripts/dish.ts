@@ -5,11 +5,11 @@
 import {
   getPlacesByDish,
   getDishEmoji,
-  getLikeCount,
-  initSocialData,
   getUrlParam,
   type Place,
 } from './data';
+
+import { fetchLikeCounts } from './db';
 
 declare const L: typeof import('leaflet');
 
@@ -18,9 +18,9 @@ let markers: L.Marker[] = [];
 let allPlaces: Place[] = [];
 let selectedCity = 'all';
 let sortBy = 'rating';
+let likeCounts: Record<string, number> = {};
 
 async function init(): Promise<void> {
-  initSocialData();
   const dishName = getUrlParam('dish');
   if (!dishName) {
     window.location.href = '/dishes.html';
@@ -50,6 +50,11 @@ async function init(): Promise<void> {
   });
 
   initMap();
+  // Fetch like counts then re-render with real data
+  fetchLikeCounts(allPlaces.map((p) => p.id)).then((counts) => {
+    likeCounts = counts;
+    render();
+  });
   render();
 }
 
@@ -92,7 +97,7 @@ function getFilteredSorted(): Place[] {
 
   switch (sortBy) {
     case 'rating':
-      places.sort((a, b) => getLikeCount(b.id) - getLikeCount(a.id));
+      places.sort((a, b) => (likeCounts[b.id] ?? 0) - (likeCounts[a.id] ?? 0));
       break;
     case 'price-asc':
       places.sort((a, b) => a.priceRange.length - b.priceRange.length);
@@ -157,9 +162,8 @@ function updateMap(places: Place[]): void {
 function renderCards(places: Place[]): void {
   const grid = document.getElementById('places-grid')!;
   grid.innerHTML = places
-    .map((place) => {
-      const likes = getLikeCount(place.id);
-      return `
+    .map(
+      (place) => `
       <div class="place-card">
         <div class="place-card-image">
           ${place.imageUrl ? `<img src="${place.imageUrl}" alt="${place.name}">` : '🍽️'}
@@ -169,15 +173,21 @@ function renderCards(places: Place[]): void {
           <div class="place-card-meta">
             <span>${place.city}</span>
             <span>${place.priceRange}</span>
-            ${likes > 0 ? `<span class="place-card-likes">♥ ${likes}</span>` : ''}
+            <span class="place-card-likes" data-likes="${place.id}"></span>
           </div>
           <div class="place-card-tags">
             ${place.cuisine.map((c) => `<span class="tag">${c}</span>`).join('')}
           </div>
         </div>
-      </div>`;
-    })
+      </div>`
+    )
     .join('');
+
+  places.forEach((place) => {
+    const count = likeCounts[place.id] ?? 0;
+    const el = grid.querySelector<HTMLElement>(`[data-likes="${place.id}"]`);
+    if (el) el.textContent = count > 0 ? `♥ ${count}` : '';
+  });
 }
 
 init();

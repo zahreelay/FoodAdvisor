@@ -5,12 +5,12 @@
 import {
   getCityBySlug,
   getPlacesByCity,
-  getLikeCount,
-  initSocialData,
   getUrlParam,
   type Place,
   type City,
 } from "./data";
+
+import { fetchLikeCounts } from "./db";
 
 declare const L: typeof import("leaflet");
 
@@ -18,6 +18,7 @@ let map: L.Map | null = null;
 let markers: L.Marker[] = [];
 let allPlaces: Place[] = [];
 let currentCity: City | null = null;
+let likeCounts: Record<string, number> = {};
 
 /**
  * Initialize the city map.
@@ -114,9 +115,8 @@ function renderPlaceCards(places: Place[]): void {
   noResults.style.display = "none";
 
   grid.innerHTML = places
-    .map((place) => {
-      const likes = getLikeCount(place.id);
-      return `
+    .map(
+      (place) => `
         <article class="place-card">
           <div class="place-card-image">
             ${place.imageUrl ? `<img src="${place.imageUrl}" alt="${place.name}">` : "🍽️"}
@@ -125,7 +125,7 @@ function renderPlaceCards(places: Place[]): void {
             <h3><a href="/place.html?place=${place.slug}">${place.name}</a></h3>
             <div class="place-card-meta">
               <span class="place-card-price">${place.priceRange}</span>
-              ${likes > 0 ? `<span class="place-card-likes">♥ ${likes}</span>` : ""}
+              <span class="place-card-likes" data-likes="${place.id}"></span>
             </div>
             <div class="place-card-tags">
               ${place.cuisine
@@ -134,10 +134,16 @@ function renderPlaceCards(places: Place[]): void {
                 .join("")}
             </div>
           </div>
-        </article>
-      `;
-    })
+        </article>`
+    )
     .join("");
+
+  // Update like counts from cache (populated after first load)
+  places.forEach((place) => {
+    const count = likeCounts[place.id] ?? 0;
+    const el = grid.querySelector<HTMLElement>(`[data-likes="${place.id}"]`);
+    if (el) el.textContent = count > 0 ? `♥ ${count}` : "";
+  });
 }
 
 /**
@@ -185,7 +191,7 @@ function filterAndSortPlaces(): Place[] {
       filtered.sort((a, b) => a.name.localeCompare(b.name));
       break;
     case "rating":
-      filtered.sort((a, b) => getLikeCount(b.id) - getLikeCount(a.id));
+      filtered.sort((a, b) => (likeCounts[b.id] ?? 0) - (likeCounts[a.id] ?? 0));
       break;
     case "price-low":
       filtered.sort((a, b) => a.priceRange.length - b.priceRange.length);
@@ -254,7 +260,6 @@ function showNotFound(): void {
  * Initialize the city page.
  */
 async function init(): Promise<void> {
-  initSocialData();
   const citySlug = getUrlParam("city");
 
   if (!citySlug) {
@@ -281,8 +286,12 @@ async function init(): Promise<void> {
   // Populate filters
   populateCuisineFilter(allPlaces);
 
-  // Render places
+  // Render places, then fetch and display like counts
   renderPlaceCards(allPlaces);
+  fetchLikeCounts(allPlaces.map((p) => p.id)).then((counts) => {
+    likeCounts = counts;
+    renderPlaceCards(filterAndSortPlaces());
+  });
 
   // Add filter event listeners
   document

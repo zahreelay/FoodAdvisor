@@ -2,12 +2,11 @@
  * Dishes gallery page — browse all dishes and search for your favourite.
  */
 
-import { getAllDishes, initSocialData, type DishInfo } from './data';
+import { getAllDishes, type DishInfo } from './data';
 
 let allDishes: DishInfo[] = [];
 
 async function init(): Promise<void> {
-  initSocialData();
   allDishes = await getAllDishes();
   renderDishes(allDishes);
 

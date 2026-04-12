@@ -1125,6 +1125,12 @@ img {
   display: none !important;
 }
 
+.loading-text {
+  color: var(--color-text-light);
+  padding: 2rem 0;
+  font-size: 0.875rem;
+}
+
 /* ===== Dish Results Page ===== */
 .dish-hero {
   background: linear-gradient(135deg, #ff9800 0%, var(--color-primary) 100%);
