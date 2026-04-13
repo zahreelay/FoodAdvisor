@@ -1,6 +1,12 @@
 /**
  * Supabase client and all social interaction functions (likes, bookmarks).
- * Device ID stored in localStorage identifies users without accounts.
+ *
+ * Identity strategy:
+ *  - Logged-in users   → identified by their Supabase user UUID
+ *  - Guest users       → identified by a random UUID stored in localStorage
+ *
+ * Both values are stored in the same `device_id` column so no schema change
+ * is needed. On first login, syncGuestToUser() migrates guest rows.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -12,6 +18,7 @@ export const supabase = createClient(
 
 const DEVICE_KEY = "streetfood_device_id";
 
+/** Stable guest ID, generated once and persisted in localStorage. */
 export function getDeviceId(): string {
   let id = localStorage.getItem(DEVICE_KEY);
   if (!id) {
@@ -21,11 +28,57 @@ export function getDeviceId(): string {
   return id;
 }
 
-// ===== Likes =====
+/**
+ * Returns the authenticated user's ID when signed in, falling back to the
+ * guest device ID. Use this everywhere instead of getDeviceId() directly.
+ */
+export async function getEffectiveId(): Promise<string> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user?.id ?? getDeviceId();
+}
 
 /**
- * Fetch like counts for multiple places in one query.
+ * After a user signs in for the first time on this device, copy any likes /
+ * bookmarks recorded under their guest device ID over to their user ID.
+ * The guest rows are left in place (they don't affect counts).
  */
+export async function syncGuestToUser(
+  guestId: string,
+  userId: string
+): Promise<void> {
+  if (guestId === userId) return;
+
+  const [{ data: guestLikes }, { data: guestBookmarks }] = await Promise.all([
+    supabase.from("likes").select("place_id").eq("device_id", guestId),
+    supabase.from("bookmarks").select("place_id").eq("device_id", guestId),
+  ]);
+
+  if (guestLikes && guestLikes.length > 0) {
+    await supabase
+      .from("likes")
+      .upsert(
+        guestLikes.map((r) => ({ place_id: r.place_id, device_id: userId })),
+        { onConflict: "place_id,device_id", ignoreDuplicates: true }
+      );
+  }
+
+  if (guestBookmarks && guestBookmarks.length > 0) {
+    await supabase
+      .from("bookmarks")
+      .upsert(
+        guestBookmarks.map((r) => ({
+          place_id: r.place_id,
+          device_id: userId,
+        })),
+        { onConflict: "place_id,device_id", ignoreDuplicates: true }
+      );
+  }
+}
+
+// ===== Likes =====
+
 export async function fetchLikeCounts(
   placeIds: string[]
 ): Promise<Record<string, number>> {
@@ -44,16 +97,14 @@ export async function fetchLikeCounts(
   return counts;
 }
 
-/**
- * Fetch all social state for a single place page.
- */
 export async function fetchPlaceSocial(placeId: string): Promise<{
   likeCount: number;
   bookmarkCount: number;
   liked: boolean;
   bookmarked: boolean;
 }> {
-  const deviceId = getDeviceId();
+  const effectiveId = await getEffectiveId();
+
   const [likesRes, bookmarksRes] = await Promise.all([
     supabase.from("likes").select("device_id").eq("place_id", placeId),
     supabase.from("bookmarks").select("device_id").eq("place_id", placeId),
@@ -64,31 +115,28 @@ export async function fetchPlaceSocial(placeId: string): Promise<{
   return {
     likeCount: likes.length,
     bookmarkCount: bookmarks.length,
-    liked: likes.some((r) => r.device_id === deviceId),
-    bookmarked: bookmarks.some((r) => r.device_id === deviceId),
+    liked: likes.some((r) => r.device_id === effectiveId),
+    bookmarked: bookmarks.some((r) => r.device_id === effectiveId),
   };
 }
 
-/**
- * Toggle like. Pass the current liked state so we know insert vs delete.
- */
 export async function toggleLike(
   placeId: string,
   currentlyLiked: boolean
 ): Promise<{ count: number; liked: boolean }> {
-  const deviceId = getDeviceId();
+  const effectiveId = await getEffectiveId();
 
   if (currentlyLiked) {
     await supabase
       .from("likes")
       .delete()
       .eq("place_id", placeId)
-      .eq("device_id", deviceId);
+      .eq("device_id", effectiveId);
   } else {
     await supabase
       .from("likes")
       .upsert(
-        { place_id: placeId, device_id: deviceId },
+        { place_id: placeId, device_id: effectiveId },
         { onConflict: "place_id,device_id", ignoreDuplicates: true }
       );
   }
@@ -103,26 +151,23 @@ export async function toggleLike(
 
 // ===== Bookmarks =====
 
-/**
- * Toggle bookmark. Pass the current bookmarked state.
- */
 export async function toggleBookmark(
   placeId: string,
   currentlyBookmarked: boolean
 ): Promise<{ count: number; bookmarked: boolean }> {
-  const deviceId = getDeviceId();
+  const effectiveId = await getEffectiveId();
 
   if (currentlyBookmarked) {
     await supabase
       .from("bookmarks")
       .delete()
       .eq("place_id", placeId)
-      .eq("device_id", deviceId);
+      .eq("device_id", effectiveId);
   } else {
     await supabase
       .from("bookmarks")
       .upsert(
-        { place_id: placeId, device_id: deviceId },
+        { place_id: placeId, device_id: effectiveId },
         { onConflict: "place_id,device_id", ignoreDuplicates: true }
       );
   }
@@ -137,20 +182,20 @@ export async function toggleBookmark(
 
 // ===== Personal =====
 
-/** All place IDs this device has liked. */
 export async function getMyLikedIds(): Promise<string[]> {
+  const effectiveId = await getEffectiveId();
   const { data } = await supabase
     .from("likes")
     .select("place_id")
-    .eq("device_id", getDeviceId());
+    .eq("device_id", effectiveId);
   return data?.map((r) => r.place_id) ?? [];
 }
 
-/** All place IDs this device has bookmarked. */
 export async function getMyBookmarkedIds(): Promise<string[]> {
+  const effectiveId = await getEffectiveId();
   const { data } = await supabase
     .from("bookmarks")
     .select("place_id")
-    .eq("device_id", getDeviceId());
+    .eq("device_id", effectiveId);
   return data?.map((r) => r.place_id) ?? [];
 }

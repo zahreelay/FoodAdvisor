@@ -32,13 +32,28 @@ function initMap(city: City, places: Place[]): void {
     12
   );
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  }).addTo(map);
+  L.tileLayer(
+    "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: "abcd",
+      maxZoom: 19,
+    }
+  ).addTo(map);
 
   addPlaceMarkers(places);
 }
+
+const PLACE_PIN_SVG = `<svg viewBox="0 0 24 32" width="20" height="27" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="place-shadow" x="-40%" y="-15%" width="180%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.4)"/>
+    </filter>
+  </defs>
+  <path d="M12 1C6.925 1 2.857 5.068 2.857 10.143c0 6.643 9.143 20.857 9.143 20.857s9.143-14.214 9.143-20.857C21.143 5.068 17.075 1 12 1z" fill="#e65100" filter="url(#place-shadow)"/>
+  <circle cx="12" cy="10" r="4.5" fill="white"/>
+</svg>`;
 
 /**
  * Add place markers to the map.
@@ -56,16 +71,10 @@ function addPlaceMarkers(places: Place[]): void {
     const marker = L.marker([place.coordinates.lat, place.coordinates.lng], {
       icon: L.divIcon({
         className: "place-marker",
-        html: `<div style="
-          background: #e65100;
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          border: 2px solid white;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        "></div>`,
-        iconSize: [12, 12],
-        iconAnchor: [6, 6],
+        html: PLACE_PIN_SVG,
+        iconSize: [20, 27],
+        iconAnchor: [10, 27],
+        popupAnchor: [0, -27],
       }),
     });
 

@@ -11,7 +11,15 @@
   <header class="header">
     <div class="container">
       <a href="/" class="logo">
-        <span class="logo-icon">🍛</span>
+        <svg class="logo-svg" viewBox="0 0 28 38" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M14 1C7.925 1 3 5.925 3 12c0 8.5 11 25 11 25S25 20.5 25 12C25 5.925 20.075 1 14 1z" fill="#e65100"/>
+          <circle cx="14" cy="11.5" r="7.5" fill="white"/>
+          <ellipse cx="14" cy="13.5" rx="4.5" ry="1.8" fill="none" stroke="#e65100" stroke-width="1.3"/>
+          <path d="M9.5 13.5 Q9.5 17 14 17 Q18.5 17 18.5 13.5" fill="#ff9800" opacity="0.5"/>
+          <path d="M11.5 10.5 Q11 8.5 11.5 7" stroke="#e65100" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+          <path d="M14 9.5 Q13.5 7.5 14 6" stroke="#e65100" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+          <path d="M16.5 10.5 Q16 8.5 16.5 7" stroke="#e65100" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+        </svg>
         <span class="logo-text">Street Food India</span>
       </a>
       <nav class="nav">
@@ -42,9 +50,20 @@
 
     <section class="dishes-gallery-section">
       <div class="container">
-        <div class="dishes-grid" id="dishes-grid">
-          <!-- Dish cards loaded dynamically -->
+        <!-- City-specific dishes (visible once geolocation resolves) -->
+        <div id="city-dishes-section" class="hidden">
+          <div class="dishes-section-header">
+            <h2 class="dishes-section-title" id="city-dishes-title">Popular near you</h2>
+          </div>
+          <div class="dishes-grid" id="city-dishes-grid"></div>
         </div>
+
+        <!-- Other / all dishes -->
+        <div id="other-dishes-header" class="dishes-section-header hidden">
+          <h2 class="dishes-section-title">Other Cities</h2>
+        </div>
+        <div class="dishes-grid" id="dishes-grid"></div>
+
         <p class="no-results hidden" id="no-dishes">No dishes found matching your search.</p>
       </div>
     </section>
