@@ -24,6 +24,54 @@ import {
 import { YouTubeClient, QuotaExceededError } from "./youtubeClient.js";
 import { fetchTranscripts } from "./transcriptFetcher.js";
 
+// Cities we want to keep
+const TARGET_CITIES = ["delhi", "bangalore", "bengaluru", "mumbai", "kolkata", "hyderabad", "bombay"];
+
+// Cities we know are NOT targets — if a video explicitly mentions one of these, skip it
+// (partial list of common Indian cities outside our scope)
+const NON_TARGET_CITIES = [
+  "jaipur", "amritsar", "chandigarh", "lucknow", "agra", "varanasi", "banaras",
+  "pune", "nashik", "nagpur", "aurangabad", "goa", "panaji",
+  "ahmedabad", "surat", "vadodara", "rajkot",
+  "chennai", "madras", "coimbatore", "madurai",
+  "kochi", "cochin", "kerala", "trivandrum", "kozhikode",
+  "bhopal", "indore", "jabalpur",
+  "patna", "ranchi", "bhubaneswar",
+  "jodhpur", "udaipur", "jaisalmer",
+  "shimla", "manali", "dehradun", "rishikesh",
+  "mysore", "mysuru", "mangalore",
+  "srinagar", "jammu", "leh",
+  "darjeeling", "siliguri",
+  "visakhapatnam", "vizag", "vijayawada",
+];
+
+/**
+ * Returns true if the video is likely about one of our 5 target cities.
+ * Logic:
+ *  - If title/tags explicitly mention a non-target city → reject
+ *  - If title/tags mention a target city → accept
+ *  - If neither → accept (assume it's the channel's home city)
+ */
+function isTargetCityVideo(video: VideoInfo): boolean {
+  const text = [
+    video.title,
+    ...(video.tags || []),
+    // First 300 chars of description is usually the location/intro
+    (video.description || "").slice(0, 300),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  // Explicit non-target city mention → skip
+  if (NON_TARGET_CITIES.some((city) => text.includes(city))) return false;
+
+  // Explicit target city mention → keep
+  if (TARGET_CITIES.some((city) => text.includes(city))) return true;
+
+  // No city identified → keep (default to channel's city)
+  return true;
+}
+
 export class Scraper {
   private client: YouTubeClient;
   private progress: Progress;
@@ -288,9 +336,14 @@ export class Scraper {
 
     log.info(`Found ${videoMap.size} unique videos`);
 
-    // Enrich with full metadata
+    // Enrich with full metadata (gives us tags, full description, stats)
     let videos = Array.from(videoMap.values());
     videos = await this.client.enrichVideos(videos);
+
+    // Filter to target cities only, based on title + tags
+    const before = videos.length;
+    videos = videos.filter((v) => isTargetCityVideo(v));
+    log.info(`City filter: kept ${videos.length}/${before} videos (discarded ${before - videos.length} non-target-city)`);
 
     const videosData: VideosData = {
       fetchedAt: nowIso(),
