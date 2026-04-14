@@ -1,22 +1,81 @@
 /**
- * YouTube transcript fetcher with language priority and error handling.
+ * YouTube transcript/CC fetcher using yt-dlp.
+ *
+ * Uses yt-dlp with --cookies-from-browser chrome to bypass YouTube's PO token
+ * requirement for auto-generated captions. Falls back through language priority.
+ *
+ * Requires: pip3 install yt-dlp  (already installed)
  */
 
-import { YoutubeTranscript } from "youtube-transcript";
-import { join } from "path";
+import { execSync } from "child_process";
+import { mkdirSync, existsSync, readFileSync, readdirSync, rmSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+import { tmpdir } from "os";
 import type { TranscriptData, TranscriptError, TranscriptSegment } from "./types.js";
-import { TRANSCRIPTS_DIR, TRANSCRIPT_FETCH_DELAY, TRANSCRIPT_LANGUAGE_PRIORITY } from "./config.js";
+import { TRANSCRIPTS_DIR, TRANSCRIPT_FETCH_DELAY } from "./config.js";
 import { getLogger, sleep, nowIso, saveJson, loadJson } from "./utils.js";
 
-interface RawTranscriptItem {
-  text: string;
-  offset: number;
-  duration: number;
-  lang?: string;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Language priority: prefer Hindi (channel language), then English variants
+const LANG_PRIORITY = ["hi", "en", "en-IN", "en-GB", "en-US"];
+
+const LANG_NAMES: Record<string, string> = {
+  hi: "Hindi",
+  en: "English",
+  "en-IN": "English (India)",
+  "en-GB": "English (UK)",
+  "en-US": "English (US)",
+};
+
+interface Json3Event {
+  tStartMs?: number;
+  dDurationMs?: number;
+  segs?: Array<{ utf8: string }>;
+}
+
+interface Json3Data {
+  events?: Json3Event[];
 }
 
 /**
- * Fetch transcript for a video with language priority.
+ * Parse a yt-dlp JSON3 subtitle file into segments + full text.
+ */
+function parseJson3(filePath: string): { segments: TranscriptSegment[]; fullText: string } {
+  const raw = readFileSync(filePath, "utf-8");
+  const data = JSON.parse(raw) as Json3Data;
+  const events = data.events ?? [];
+
+  const segments: TranscriptSegment[] = events
+    .filter((e) => e.segs && e.segs.length > 0)
+    .map((e) => ({
+      text: e.segs!.map((s) => s.utf8).join("").replace(/\n/g, " ").trim(),
+      start: (e.tStartMs ?? 0) / 1000,
+      duration: (e.dDurationMs ?? 0) / 1000,
+    }))
+    .filter((s) => s.text.length > 0);
+
+  const fullText = segments.map((s) => s.text).join(" ");
+  return { segments, fullText };
+}
+
+/**
+ * Detect the language of a downloaded subtitle file from its filename.
+ * yt-dlp names files: VIDEO_ID.LANG.json3
+ */
+function detectLang(filename: string, videoId: string): string {
+  const prefix = `${videoId}.`;
+  const suffix = ".json3";
+  if (filename.startsWith(prefix) && filename.endsWith(suffix)) {
+    return filename.slice(prefix.length, -suffix.length);
+  }
+  return "unknown";
+}
+
+/**
+ * Fetch CC/transcript for one video using yt-dlp.
  */
 export async function fetchTranscript(
   videoId: string,
@@ -24,118 +83,112 @@ export async function fetchTranscript(
 ): Promise<TranscriptData | TranscriptError> {
   const log = getLogger();
 
-  const languageNames: Record<string, string> = {
-    hi: "Hindi",
-    en: "English",
-  };
+  const tmpDir = join(tmpdir(), `yt-cc-${videoId}`);
+  mkdirSync(tmpDir, { recursive: true });
 
-  // Helper to convert raw items to our format
-  function toResult(
-    transcript: RawTranscriptItem[],
-    langCode: string,
-    isAuto: boolean
-  ): TranscriptData {
-    const segments: TranscriptSegment[] = transcript.map((item) => ({
-      text: item.text,
-      start: item.offset / 1000,
-      duration: item.duration / 1000,
-    }));
+  try {
+    const subLangs = LANG_PRIORITY.join(",");
+    const cmd = [
+      "python3 -m yt_dlp",
+      "--cookies-from-browser chrome",
+      "--skip-download",
+      "--write-auto-subs",
+      "--write-subs",
+      `--sub-langs "${subLangs}"`,
+      "--sub-format json3",
+      "--no-warnings",
+      "--quiet",
+      `-o "${tmpDir}/%(id)s"`,
+      `"https://www.youtube.com/watch?v=${videoId}"`,
+    ].join(" ");
+
+    execSync(cmd, { stdio: "pipe", timeout: 60_000 });
+
+    // Find downloaded subtitle files
+    const files = readdirSync(tmpDir).filter((f) => f.endsWith(".json3"));
+
+    if (files.length === 0) {
+      log.warn(`No CC found for ${videoId}`);
+      return { videoId, videoTitle, error: "no_transcript_available", fetchedAt: nowIso() };
+    }
+
+    // Pick best language in priority order
+    let bestFile: string | null = null;
+    let bestLang = "unknown";
+
+    for (const lang of LANG_PRIORITY) {
+      const match = files.find((f) => {
+        const detected = detectLang(f, videoId);
+        return detected === lang || detected === `${lang}-orig`;
+      });
+      if (match) {
+        bestFile = join(tmpDir, match);
+        bestLang = lang;
+        break;
+      }
+    }
+
+    // Fallback: just take the first file
+    if (!bestFile) {
+      bestFile = join(tmpDir, files[0]);
+      bestLang = detectLang(files[0], videoId);
+    }
+
+    const { segments, fullText } = parseJson3(bestFile);
+
+    if (fullText.trim().length === 0) {
+      return { videoId, videoTitle, error: "empty_transcript", fetchedAt: nowIso() };
+    }
+
+    log.info(`CC fetched for ${videoId} (${bestLang}, ${segments.length} segments, ${fullText.length} chars)`);
+
     return {
       videoId,
       videoTitle,
-      language: langCode,
-      languageName: languageNames[langCode] || langCode,
-      isAutoGenerated: isAuto,
+      language: bestLang,
+      languageName: LANG_NAMES[bestLang] ?? bestLang,
+      isAutoGenerated: true,
       fetchedAt: nowIso(),
       segments,
-      fullText: segments.map((s) => s.text).join(" "),
+      fullText,
     };
-  }
-
-  // Try each language in priority order
-  for (const [langCode, isAuto] of TRANSCRIPT_LANGUAGE_PRIORITY) {
-    try {
-      const transcript = await YoutubeTranscript.fetchTranscript(videoId, {
-        lang: langCode,
-      });
-      if (transcript && transcript.length > 0) {
-        log.info(`Fetched transcript for ${videoId} (${langCode}${isAuto ? " auto" : ""})`);
-        return toResult(transcript, langCode, isAuto);
-      }
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      log.debug(`No ${langCode} transcript for ${videoId}: ${err.message}`);
-    }
-  }
-
-  // Fallback: let YouTube pick whatever CC/transcript is available
-  try {
-    const transcript = await YoutubeTranscript.fetchTranscript(videoId);
-    if (transcript && transcript.length > 0) {
-      const detectedLang = (transcript[0] as RawTranscriptItem & { lang?: string }).lang ?? "unknown";
-      log.info(`Fetched CC fallback for ${videoId} (lang: ${detectedLang})`);
-      return toResult(transcript, detectedLang, true);
-    }
   } catch (error: unknown) {
-    const err = error as { message?: string };
-    log.debug(`No CC fallback for ${videoId}: ${err.message}`);
+    const err = error as { message?: string; stderr?: Buffer };
+    const msg = err.stderr?.toString() || err.message || "unknown_error";
+    log.warn(`yt-dlp failed for ${videoId}: ${msg.slice(0, 120)}`);
+    return { videoId, videoTitle, error: msg.slice(0, 200), fetchedAt: nowIso() };
+  } finally {
+    // Clean up temp files
+    try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
   }
-
-  // No transcript or CC available in any form
-  log.warn(`No transcript available for ${videoId}`);
-
-  return {
-    videoId,
-    videoTitle,
-    error: "no_transcript_available",
-    fetchedAt: nowIso(),
-  };
 }
 
-/**
- * Get the transcript file path for a video.
- */
+// ── Rest of the file unchanged ─────────────────────────────────────────────
+
 export function getTranscriptPath(videoId: string): string {
   return join(TRANSCRIPTS_DIR, `${videoId}.json`);
 }
 
-/**
- * Check if transcript already exists for a video.
- */
 export function transcriptExists(videoId: string): boolean {
   const path = getTranscriptPath(videoId);
   const data = loadJson<TranscriptData | TranscriptError>(path);
   return data !== null;
 }
 
-/**
- * Save transcript data to file.
- */
 export function saveTranscript(data: TranscriptData | TranscriptError): void {
-  const path = getTranscriptPath(data.videoId);
-  saveJson(path, data);
+  saveJson(getTranscriptPath(data.videoId), data);
 }
 
-/**
- * Load transcript data from file.
- */
 export function loadTranscript(videoId: string): TranscriptData | TranscriptError | null {
-  const path = getTranscriptPath(videoId);
-  return loadJson<TranscriptData | TranscriptError>(path);
+  return loadJson<TranscriptData | TranscriptError>(getTranscriptPath(videoId));
 }
 
-/**
- * Check if a transcript result is an error.
- */
 export function isTranscriptError(
   data: TranscriptData | TranscriptError
 ): data is TranscriptError {
   return "error" in data;
 }
 
-/**
- * Fetch and save transcripts for multiple videos.
- */
 export async function fetchTranscripts(
   videos: Array<{ id: string; title: string }>,
   skipExisting: boolean = true,
@@ -145,58 +198,32 @@ export async function fetchTranscripts(
   const success: string[] = [];
   const failed: string[] = [];
 
-  log.info(`Fetching transcripts for ${videos.length} videos`);
+  log.info(`Fetching CC for ${videos.length} videos via yt-dlp`);
 
   for (let i = 0; i < videos.length; i++) {
     const video = videos[i];
 
-    // Skip if already exists
     if (skipExisting && transcriptExists(video.id)) {
-      log.debug(`Skipping existing transcript: ${video.id}`);
+      log.debug(`Skipping existing: ${video.id}`);
       const existing = loadTranscript(video.id);
-      if (existing && !isTranscriptError(existing)) {
-        success.push(video.id);
-      } else {
-        failed.push(video.id);
-      }
-      onProgress?.(i + 1, videos.length, video.id, !isTranscriptError(existing!));
+      const ok = !isTranscriptError(existing!);
+      (ok ? success : failed).push(video.id);
+      onProgress?.(i + 1, videos.length, video.id, ok);
       continue;
     }
 
-    try {
-      const result = await fetchTranscript(video.id, video.title);
-      saveTranscript(result);
+    const result = await fetchTranscript(video.id, video.title);
+    saveTranscript(result);
 
-      if (isTranscriptError(result)) {
-        failed.push(video.id);
-        onProgress?.(i + 1, videos.length, video.id, false);
-      } else {
-        success.push(video.id);
-        onProgress?.(i + 1, videos.length, video.id, true);
-      }
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      log.error(`Failed to fetch transcript for ${video.id}: ${err.message}`);
+    const ok = !isTranscriptError(result);
+    (ok ? success : failed).push(video.id);
+    onProgress?.(i + 1, videos.length, video.id, ok);
 
-      // Save error marker
-      const errorData: TranscriptError = {
-        videoId: video.id,
-        videoTitle: video.title,
-        error: err.message || "unknown_error",
-        fetchedAt: nowIso(),
-      };
-      saveTranscript(errorData);
-      failed.push(video.id);
-      onProgress?.(i + 1, videos.length, video.id, false);
-    }
-
-    // Rate limit
     if (i < videos.length - 1) {
       await sleep(TRANSCRIPT_FETCH_DELAY);
     }
   }
 
-  log.info(`Transcripts complete: ${success.length} success, ${failed.length} failed`);
-
+  log.info(`CC complete: ${success.length} ok, ${failed.length} failed`);
   return { success, failed };
 }
