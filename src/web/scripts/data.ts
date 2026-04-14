@@ -24,6 +24,7 @@ export interface Place {
   sourceVideoTitle: string;
   description?: string;
   imageUrl?: string;
+  images?: string[];
 }
 
 export interface PlacesData {
@@ -70,6 +71,7 @@ function rowToPlace(r: Record<string, unknown>): Place {
     sourceVideoTitle: (r.source_video_title as string) ?? "",
     description: r.description as string | undefined,
     imageUrl: r.image_url as string | undefined,
+    images: (r.images as string[] | null) ?? undefined,
   };
 }
 

@@ -117,6 +117,88 @@ function updatePageContent(place: Place, cityName: string): void {
         : "<span>No dishes listed</span>";
 }
 
+function renderImages(place: Place): void {
+  const container = document.getElementById("place-images");
+  if (!container) return;
+
+  const imgs =
+    place.images && place.images.length > 0
+      ? place.images
+      : place.imageUrl
+      ? [place.imageUrl]
+      : [];
+
+  if (imgs.length === 0) {
+    container.innerHTML = `<div class="image-placeholder"><span>📷</span><p>No images available</p></div>`;
+    return;
+  }
+
+  if (imgs.length === 1) {
+    container.innerHTML = `<div class="place-single-image"><img src="${imgs[0]}" alt="${place.name}" loading="eager"></div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="img-carousel" role="region" aria-label="Photos of ${place.name}">
+      <div class="img-carousel-track" id="carousel-track">
+        ${imgs
+          .map(
+            (src, i) => `
+          <div class="img-carousel-slide" aria-hidden="${i !== 0}">
+            <img src="${src}" alt="${place.name} photo ${i + 1}" loading="${i === 0 ? "eager" : "lazy"}">
+          </div>`
+          )
+          .join("")}
+      </div>
+      <button class="img-carousel-btn img-carousel-prev" aria-label="Previous photo" id="carousel-prev">&#8249;</button>
+      <button class="img-carousel-btn img-carousel-next" aria-label="Next photo" id="carousel-next">&#8250;</button>
+      <div class="img-carousel-dots" role="tablist">
+        ${imgs
+          .map(
+            (_, i) => `
+          <button class="img-carousel-dot${i === 0 ? " active" : ""}"
+            role="tab" aria-selected="${i === 0}"
+            aria-label="Photo ${i + 1}" data-index="${i}"></button>`
+          )
+          .join("")}
+      </div>
+    </div>`;
+
+  let current = 0;
+  const track = document.getElementById("carousel-track")!;
+  const dots = container.querySelectorAll<HTMLButtonElement>(".img-carousel-dot");
+  const slides = container.querySelectorAll<HTMLElement>(".img-carousel-slide");
+
+  function goTo(index: number): void {
+    current = ((index % imgs.length) + imgs.length) % imgs.length;
+    track.style.transform = `translateX(-${current * 100}%)`;
+    dots.forEach((d, i) => {
+      d.classList.toggle("active", i === current);
+      d.setAttribute("aria-selected", String(i === current));
+    });
+    slides.forEach((s, i) => s.setAttribute("aria-hidden", String(i !== current)));
+  }
+
+  container
+    .querySelector("#carousel-prev")!
+    .addEventListener("click", () => goTo(current - 1));
+  container
+    .querySelector("#carousel-next")!
+    .addEventListener("click", () => goTo(current + 1));
+  dots.forEach((dot) =>
+    dot.addEventListener("click", () => goTo(Number(dot.dataset.index)))
+  );
+
+  // Swipe
+  let touchStartX = 0;
+  const carouselEl = container.querySelector<HTMLElement>(".img-carousel")!;
+  carouselEl.addEventListener("touchstart", (e) => { touchStartX = e.touches[0].clientX; }, { passive: true });
+  carouselEl.addEventListener("touchend", (e) => {
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 40) goTo(diff > 0 ? current + 1 : current - 1);
+  });
+}
+
 function showToast(message: string): void {
   const toast = document.getElementById("toast")!;
   toast.textContent = message;
@@ -305,6 +387,7 @@ async function init(): Promise<void> {
 
   const city = await getCityBySlug(place.citySlug);
   updatePageContent(place, city?.name || place.city);
+  renderImages(place);
 
   if (place.coordinates) initMap(place);
 

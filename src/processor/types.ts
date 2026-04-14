@@ -22,6 +22,7 @@ export interface Place {
   sourceVideoTitle: string;
   description?: string;
   imageUrl?: string;
+  images?: string[];
 }
 
 export interface PlacesData {

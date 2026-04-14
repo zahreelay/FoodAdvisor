@@ -207,7 +207,7 @@ async function getPlaceDetails(placeId: string): Promise<{
       }));
 
       const photoRefs = (result.photos || [])
-        .slice(0, 5) // Limit to 5 photos
+        .slice(0, 4) // Limit to 4 photos
         .map((p) => p.photo_reference);
 
       return {
@@ -230,10 +230,18 @@ async function getPlaceDetails(placeId: string): Promise<{
 }
 
 /**
- * Get photo URL from photo reference.
+ * Resolve a photo reference to a permanent CDN URL by following the API redirect.
+ * This avoids storing the API key inside the image URL.
  */
-function getPhotoUrl(photoRef: string, maxWidth = 800): string {
-  return `${PLACES_API_URL}/photo?maxwidth=${maxWidth}&photo_reference=${photoRef}&key=${GOOGLE_PLACES_API_KEY}`;
+async function resolvePhotoUrl(photoRef: string, maxWidth = 800): Promise<string | null> {
+  const url = `${PLACES_API_URL}/photo?maxwidth=${maxWidth}&photo_reference=${photoRef}&key=${GOOGLE_PLACES_API_KEY}`;
+  try {
+    const res = await fetch(url);
+    // After redirect, res.url is the final CDN URL (no API key)
+    return res.url !== url ? res.url : url;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -303,8 +311,10 @@ export async function fetchGooglePlacesData(options: {
       continue;
     }
 
-    // Convert photo refs to URLs
-    const photos = details.photoRefs.map((ref) => getPhotoUrl(ref));
+    // Resolve photo refs to permanent CDN URLs
+    const photos = (
+      await Promise.all(details.photoRefs.map((ref) => resolvePhotoUrl(ref)))
+    ).filter((u): u is string => u !== null);
 
     // Cache the result
     cache[place.id] = {
