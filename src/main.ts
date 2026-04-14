@@ -33,7 +33,8 @@ program
   )
   .option("-r, --resume", "Resume interrupted run", false)
   .option("-d, --dry-run", "Show what would be fetched without making API calls", false)
-  .option("-v, --verbose", "Enable verbose logging", false);
+  .option("-v, --verbose", "Enable verbose logging", false)
+  .option("-l, --limit <n>", "Only scrape the latest N videos", undefined);
 
 program.parse(process.argv);
 
@@ -60,6 +61,7 @@ async function main(): Promise<void> {
     resume: opts.resume,
     dryRun: opts.dryRun,
     verbose: opts.verbose,
+    limit: opts.limit ? parseInt(opts.limit as string, 10) : undefined,
   };
 
   // Run scraper

@@ -271,8 +271,11 @@ export function extractPlaceFromVideo(
     })
     .join(" ");
 
-  // Extract city
-  const city = extractCity(playlistTitle, video.title);
+  // Tags are set explicitly by creators — treat them as high-signal text
+  const tagsText = (video.tags || []).join(" ");
+
+  // Extract city — check tags first as they're explicit
+  const city = extractCity(playlistTitle, `${video.title} ${tagsText}`);
   if (!city) {
     return null; // Skip videos without identifiable city
   }
@@ -282,12 +285,12 @@ export function extractPlaceFromVideo(
     return null;
   }
 
-  // Extract place details
+  // Extract place details — include tags in all extraction passes
   const name = extractPlaceName(video.title);
   const address = extractAddress(video.description);
-  const dishes = extractDishes(video.title, video.description);
-  const cuisine = extractCuisine(video.title, video.description, dishes);
-  const priceRange = extractPriceRange(video.title, video.description);
+  const dishes = extractDishes(video.title, `${video.description} ${tagsText}`);
+  const cuisine = extractCuisine(video.title, `${video.description} ${tagsText}`, dishes);
+  const priceRange = extractPriceRange(video.title, `${video.description} ${tagsText}`);
 
   // Generate unique ID and slug
   const slug = slugify(`${name}-${city}`);

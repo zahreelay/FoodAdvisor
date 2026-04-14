@@ -249,11 +249,12 @@ export class YouTubeClient {
   }
 
   /**
-   * Fetch all videos from a playlist.
+   * Fetch videos from a playlist, newest first, with optional limit.
    */
-  async *getPlaylistVideos(playlistId: string): AsyncGenerator<VideoInfo> {
+  async *getPlaylistVideos(playlistId: string, limit?: number): AsyncGenerator<VideoInfo> {
     const log = getLogger();
     let pageToken: string | undefined;
+    let fetched = 0;
 
     do {
       let response;
@@ -278,6 +279,8 @@ export class YouTubeClient {
       const items = response.data.items || [];
 
       for (const item of items) {
+        if (limit && fetched >= limit) return;
+
         const snippet = item.snippet || {};
         const content = item.contentDetails || {};
 
@@ -295,10 +298,11 @@ export class YouTubeClient {
           channelId: snippet.channelId ?? undefined,
           channelTitle: snippet.channelTitle ?? undefined,
         };
+        fetched++;
       }
 
       pageToken = response.data.nextPageToken ?? undefined;
-    } while (pageToken);
+    } while (pageToken && !(limit && fetched >= limit));
   }
 
   /**

@@ -113,8 +113,12 @@ export async function processData(options: {
 
   // Extract places from videos
   console.log("Extracting places from videos...");
-  let places = extractPlacesFromVideos(videosData.videos, playlistsData.playlists);
-  console.log(`Extracted ${places.length} unique places\n`);
+  const allPlaces = extractPlacesFromVideos(videosData.videos, playlistsData.playlists);
+
+  // Filter to target cities only
+  const TARGET_CITIES = new Set(["delhi", "bangalore", "bengaluru", "mumbai", "kolkata", "hyderabad"]);
+  let places = allPlaces.filter((p) => TARGET_CITIES.has(p.citySlug));
+  console.log(`Extracted ${allPlaces.length} places total, ${places.length} in target cities\n`);
 
   // Geocode places
   console.log("Geocoding places...");

@@ -272,7 +272,7 @@ export class Scraper {
     for (const playlist of playlistsToProcess) {
       log.info(`Processing playlist: ${playlist.title} (${playlist.videoCount} videos)`);
 
-      for await (const video of this.client.getPlaylistVideos(playlist.id)) {
+      for await (const video of this.client.getPlaylistVideos(playlist.id, this.options.limit)) {
         const existing = videoMap.get(video.id);
 
         if (existing) {

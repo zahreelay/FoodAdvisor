@@ -95,4 +95,5 @@ export interface ScraperOptions {
   resume?: boolean;
   dryRun?: boolean;
   verbose?: boolean;
+  limit?: number;
 }

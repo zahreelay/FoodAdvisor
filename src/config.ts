@@ -7,8 +7,9 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { mkdirSync, existsSync } from "fs";
 
-// Load environment variables
+// Load environment variables (.env.local overrides .env)
 dotenvConfig();
+dotenvConfig({ path: ".env.local", override: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
