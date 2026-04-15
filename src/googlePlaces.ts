@@ -7,13 +7,13 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { config as dotenvConfig } from "dotenv";
 
-dotenvConfig();
+dotenvConfig({ path: new URL("../../.env.local", import.meta.url).pathname });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Configuration
-const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY || "";
+const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY || process.env.YOUTUBE_API_KEY || "";
 const PLACES_API_URL = "https://maps.googleapis.com/maps/api/place";
 
 // Paths

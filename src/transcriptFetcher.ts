@@ -8,7 +8,7 @@
  */
 
 import { execSync } from "child_process";
-import { mkdirSync, existsSync, readFileSync, readdirSync, rmSync } from "fs";
+import { mkdirSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { tmpdir } from "os";
@@ -18,6 +18,19 @@ import { getLogger, sleep, nowIso, saveJson, loadJson } from "./utils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const COOKIES_FILE = join(__dirname, "../../cookies.txt");
+
+/**
+ * Return the yt-dlp cookie flag.
+ * Prefers a cookies.txt file (no password prompt) over live browser extraction.
+ */
+function cookieFlag(): string {
+  if (existsSync(COOKIES_FILE)) {
+    return `--cookies "${COOKIES_FILE}"`;
+  }
+  return "--cookies-from-browser chrome";
+}
 
 // Language priority: prefer Hindi (channel language), then English variants
 const LANG_PRIORITY = ["hi", "en", "en-IN", "en-GB", "en-US"];
@@ -90,7 +103,7 @@ export async function fetchTranscript(
     const subLangs = LANG_PRIORITY.join(",");
     const cmd = [
       "python3 -m yt_dlp",
-      "--cookies-from-browser chrome",
+      cookieFlag(),
       "--skip-download",
       "--write-auto-subs",
       "--write-subs",

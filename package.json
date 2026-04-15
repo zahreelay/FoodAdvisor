@@ -20,7 +20,10 @@
     "web:build": "npm run copy-data && vite build --config src/web/vite.config.ts",
     "web:preview": "vite preview --config src/web/vite.config.ts",
     "copy-data": "node scripts/copy-data.js",
-    "seed-db": "node scripts/seed-db.js"
+    "seed-db": "node scripts/seed-db.js",
+    "export-cookies": "python3 -m yt_dlp --cookies-from-browser chrome --cookies cookies.txt --skip-download https://www.youtube.com/watch?v=dQw4w9WgXcQ && echo 'cookies.txt saved — no more password prompts'",
+    "clear-db": "node scripts/clear-db.js",
+    "process-video": "tsx src/processVideo.ts"
   },
   "keywords": [
     "youtube",
@@ -32,6 +35,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
     "@supabase/supabase-js": "^2.103.0",
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",

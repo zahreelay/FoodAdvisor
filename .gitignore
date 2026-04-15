@@ -23,5 +23,8 @@ Thumbs.db
 # Logs
 *.log
 
+# YouTube cookies (contains session data, never commit)
+cookies.txt
+
 # TypeScript
 *.tsbuildinfo
