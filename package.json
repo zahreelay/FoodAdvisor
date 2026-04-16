@@ -16,6 +16,8 @@
     "process:full": "tsx src/processor/processor.ts --geocode --summarize",
     "fetch-images": "tsx src/imageFetcher.ts",
     "fetch-images:force": "tsx src/imageFetcher.ts --force",
+    "google-places": "tsx src/googlePlaces.ts",
+    "google-places:force": "tsx src/googlePlaces.ts --force",
     "web:dev": "npm run copy-data && vite --config src/web/vite.config.ts",
     "web:build": "npm run copy-data && vite build --config src/web/vite.config.ts",
     "web:preview": "vite preview --config src/web/vite.config.ts",

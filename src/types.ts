@@ -96,4 +96,5 @@ export interface ScraperOptions {
   dryRun?: boolean;
   verbose?: boolean;
   limit?: number;
+  city?: string;
 }

@@ -48,7 +48,7 @@ function renderPlaceCard(place: Place, mode: "likes" | "bookmarks"): string {
   return `
     <div class="place-card personal-card" data-id="${place.id}" data-mode="${mode}">
       <div class="place-card-image">
-        ${place.imageUrl ? `<img src="${place.imageUrl}" alt="${place.name}">` : "🍽️"}
+        ${place.images?.[0] ?? place.imageUrl ? `<img src="${place.images?.[0] ?? place.imageUrl}" alt="${place.name}">` : "🍽️"}
       </div>
       <div class="place-card-content">
         <h3><a href="/place.html?place=${place.slug}">${place.name}</a></h3>

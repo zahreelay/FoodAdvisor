@@ -1,35 +1,40 @@
 /**
  * YouTube transcript/CC fetcher using yt-dlp.
  *
- * Uses yt-dlp with --cookies-from-browser chrome to bypass YouTube's PO token
- * requirement for auto-generated captions. Falls back through language priority.
+ * Primary: yt-dlp auto-generated captions.
+ * Fallback: download audio + OpenAI Whisper transcription/translation.
+ * Uses cookies.txt if present; otherwise runs without auth (works for public videos).
  *
  * Requires: pip3 install yt-dlp  (already installed)
  */
 
 import { execSync } from "child_process";
-import { mkdirSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "fs";
+import { mkdirSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSync, createReadStream } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { tmpdir } from "os";
+import { config as dotenvConfig } from "dotenv";
+import { resolve } from "path";
 import type { TranscriptData, TranscriptError, TranscriptSegment } from "./types.js";
 import { TRANSCRIPTS_DIR, TRANSCRIPT_FETCH_DELAY } from "./config.js";
 import { getLogger, sleep, nowIso, saveJson, loadJson } from "./utils.js";
 
+dotenvConfig({ path: resolve(process.cwd(), ".env.local") });
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const COOKIES_FILE = join(__dirname, "../../cookies.txt");
+const COOKIES_FILE = join(process.cwd(), "cookies.txt");
 
 /**
  * Return the yt-dlp cookie flag.
- * Prefers a cookies.txt file (no password prompt) over live browser extraction.
+ * Uses cookies.txt if available; otherwise runs without cookies (public videos don't need auth).
  */
 function cookieFlag(): string {
   if (existsSync(COOKIES_FILE)) {
     return `--cookies "${COOKIES_FILE}"`;
   }
-  return "--cookies-from-browser chrome";
+  return "";
 }
 
 // Language priority: prefer Hindi (channel language), then English variants
@@ -88,6 +93,103 @@ function detectLang(filename: string, videoId: string): string {
 }
 
 /**
+ * Download audio and transcribe via OpenAI Whisper (translate to English).
+ * Used when no CC is available.
+ */
+async function fetchTranscriptViaWhisper(
+  videoId: string,
+  videoTitle: string
+): Promise<TranscriptData | TranscriptError> {
+  const log = getLogger();
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return { videoId, videoTitle, error: "OPENAI_API_KEY not set — cannot use Whisper fallback", fetchedAt: nowIso() };
+  }
+
+  const tmpDir = join(tmpdir(), `yt-audio-${videoId}`);
+  mkdirSync(tmpDir, { recursive: true });
+  const audioPath = join(tmpDir, `${videoId}.mp3`);
+
+  try {
+    log.info(`Downloading audio for Whisper: ${videoId}`);
+    const dlCmd = [
+      "python3 -m yt_dlp",
+      cookieFlag(),
+      "--extract-audio",
+      "--audio-format mp3",
+      "--audio-quality 4",   // ~65kbps — small file, sufficient for speech
+      // Prefer non-SABR audio-only formats; fall back to worst video+audio mux
+      "--format", '"18/bestaudio/best"',  // format 18 = legacy mp4, always available
+      "--audio-quality 9",               // lowest bitrate (~45kbps) — keeps file small
+      "--postprocessor-args", '"ffmpeg:-ar 16000 -ac 1"',  // 16kHz mono, ~2MB/min
+      "--no-playlist",
+      "--no-warnings",
+      "--quiet",
+      `-o "${audioPath}"`,
+      `"https://www.youtube.com/watch?v=${videoId}"`,
+    ].filter(Boolean).join(" ");
+
+    execSync(dlCmd, { stdio: "pipe", timeout: 120_000 });
+
+    if (!existsSync(audioPath)) {
+      return { videoId, videoTitle, error: "audio_download_failed", fetchedAt: nowIso() };
+    }
+
+    log.info(`Sending audio to Whisper (translate to English)...`);
+
+    const formData = new FormData();
+    const audioBlob = new Blob([readFileSync(audioPath)], { type: "audio/mpeg" });
+    formData.append("file", audioBlob, `${videoId}.mp3`);
+    formData.append("model", "whisper-1");
+    formData.append("response_format", "verbose_json");
+
+    const res = await fetch("https://api.openai.com/v1/audio/translations", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return { videoId, videoTitle, error: `whisper_api_error: ${err.slice(0, 200)}`, fetchedAt: nowIso() };
+    }
+
+    const data = await res.json() as { text: string; segments?: Array<{ start: number; end: number; text: string }> };
+    const fullText = data.text?.trim() ?? "";
+
+    if (!fullText) {
+      return { videoId, videoTitle, error: "whisper_empty_result", fetchedAt: nowIso() };
+    }
+
+    const segments: TranscriptSegment[] = (data.segments ?? []).map((s) => ({
+      text: s.text.trim(),
+      start: s.start,
+      duration: s.end - s.start,
+    }));
+
+    log.info(`Whisper transcription: ${fullText.length} chars`);
+
+    return {
+      videoId,
+      videoTitle,
+      language: "en",
+      languageName: "English (Whisper translation)",
+      isAutoGenerated: false,
+      fetchedAt: nowIso(),
+      segments,
+      fullText,
+    };
+  } catch (error: unknown) {
+    const err = error as { message?: string; stderr?: Buffer };
+    const msg = err.stderr?.toString() || err.message || "unknown_error";
+    log.warn(`Whisper fallback failed for ${videoId}: ${msg.slice(0, 120)}`);
+    return { videoId, videoTitle, error: msg.slice(0, 200), fetchedAt: nowIso() };
+  } finally {
+    try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+  }
+}
+
+/**
  * Fetch CC/transcript for one video using yt-dlp.
  */
 export async function fetchTranscript(
@@ -121,8 +223,8 @@ export async function fetchTranscript(
     const files = readdirSync(tmpDir).filter((f) => f.endsWith(".json3"));
 
     if (files.length === 0) {
-      log.warn(`No CC found for ${videoId}`);
-      return { videoId, videoTitle, error: "no_transcript_available", fetchedAt: nowIso() };
+      log.warn(`No CC found for ${videoId} — trying Whisper fallback`);
+      return fetchTranscriptViaWhisper(videoId, videoTitle);
     }
 
     // Pick best language in priority order

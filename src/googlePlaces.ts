@@ -3,11 +3,11 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
-import { join, dirname } from "path";
+import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { config as dotenvConfig } from "dotenv";
 
-dotenvConfig({ path: new URL("../../.env.local", import.meta.url).pathname });
+dotenvConfig({ path: resolve(process.cwd(), ".env.local") });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

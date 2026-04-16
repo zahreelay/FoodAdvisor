@@ -74,6 +74,10 @@ async function seedPlaces(places) {
     source_video_title: p.sourceVideoTitle ?? null,
     description: p.description ?? null,
     image_url: p.imageUrl ?? null,
+    images: p.images ?? null,
+    google_place_id: p.googlePlaceId ?? null,
+    google_rating: p.googleRating ?? null,
+    google_review_count: p.googleReviewCount ?? null,
   }));
 
   // Upsert in batches of 100 to avoid request size limits
@@ -93,8 +97,8 @@ async function seedPlaces(places) {
 }
 
 async function main() {
-  const placesData = loadJson("../src/web/public/data/places.json");
-  const citiesData = loadJson("../src/web/public/data/cities.json");
+  const placesData = loadJson("../data/processed/places.json");
+  const citiesData = loadJson("../data/processed/cities.json");
 
   await seedCities(citiesData.cities);
   await seedPlaces(placesData.places);

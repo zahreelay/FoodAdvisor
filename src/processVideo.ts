@@ -170,39 +170,30 @@ async function seedToSupabase(places: Place[], cities: City[]): Promise<void> {
   for (let i = 0; i < placeRows.length; i += BATCH) {
     const { error } = await supabase
       .from("places")
-      .upsert(placeRows.slice(i, i + BATCH), { onConflict: "id" });
+      .upsert(placeRows.slice(i, i + BATCH), { onConflict: "slug" });
     if (error) throw new Error(`Places upsert failed: ${error.message}`);
   }
   console.log(`✓ ${places.length} places seeded`);
 }
 
-// ── Main ────────────────────────────────────────────────────────────────────
+// ── Per-video pipeline ────────────────────────────────────────────────────
 
-async function main() {
-  const args = process.argv.slice(2);
-  const rawVideoId = args.find((a) => !a.startsWith("--"));
-  const force = args.includes("--force");
-
-  if (!rawVideoId) {
-    console.error("Usage: npm run process-video <videoId> [--force]");
-    process.exit(1);
-  }
-
-  // Strip query params like &t=19s
-  const videoId = rawVideoId.split("&")[0].split("?")[0];
-
+/**
+ * Run the full pipeline for a single video ID.
+ * Returns false if skipped (already processed and !force), true otherwise.
+ */
+async function processOneVideo(videoId: string, force: boolean): Promise<boolean> {
   // Check if already processed
   const existing = isAlreadyProcessed(videoId);
   if (existing && !force) {
-    console.log(`\n⏭  Already processed: ${existing.title}`);
-    console.log(`   Processed at: ${existing.processedAt}`);
-    console.log(`   Places: ${existing.placesExtracted.length}`);
-    console.log(`\nRun with --force to reprocess.`);
-    return;
+    console.log(`\nSkipping (already processed): ${existing.title}`);
+    console.log(`  Processed at: ${existing.processedAt} — ${existing.placesExtracted.length} places`);
+    console.log(`  Run with --force to reprocess.`);
+    return false;
   }
 
   if (existing && force) {
-    console.log(`\n🔁 Force reprocessing: ${existing.title}\n`);
+    console.log(`\n--- Force reprocessing: ${videoId} ---\n`);
   } else {
     console.log(`\n=== Processing video: ${videoId} ===\n`);
   }
@@ -212,8 +203,8 @@ async function main() {
   const ytClient = new YouTubeClient();
   const videos = await ytClient.getVideoDetails([videoId]);
   if (videos.length === 0) {
-    console.error(`Video not found: ${videoId}`);
-    process.exit(1);
+    console.error(`   Video not found: ${videoId} — skipping`);
+    return false;
   }
   const video = videos[0];
   console.log(`   Title: ${video.title}`);
@@ -240,8 +231,8 @@ async function main() {
   console.log(`   Found ${places.length} places`);
 
   if (places.length === 0) {
-    console.error("No places extracted. Exiting.");
-    process.exit(1);
+    console.warn("   No places extracted — skipping DB seed for this video.");
+    return true;
   }
 
   // 4. Geocode
@@ -253,26 +244,27 @@ async function main() {
   console.log("\n5. Saving processed data...");
   let allPlaces: Place[] = [];
   if (existsSync(join(PROCESSED_DATA_DIR, "places.json"))) {
-    const existing = JSON.parse(readFileSync(join(PROCESSED_DATA_DIR, "places.json"), "utf-8")) as PlacesData;
-    // Remove old entries from this video, then add new ones
-    allPlaces = existing.places.filter((p) => p.sourceVideoId !== videoId);
+    const existingData = JSON.parse(readFileSync(join(PROCESSED_DATA_DIR, "places.json"), "utf-8")) as PlacesData;
+    // Remove any existing entry for this video OR same slug (new data wins)
+    const newSlugs = new Set(places.map((p) => p.slug));
+    allPlaces = existingData.places.filter(
+      (p) => p.sourceVideoId !== videoId && !newSlugs.has(p.slug)
+    );
   }
   allPlaces = [...allPlaces, ...places];
 
   const allCities = generateCities(allPlaces);
 
-  const placesData: PlacesData = {
+  saveJson(join(PROCESSED_DATA_DIR, "places.json"), {
     generatedAt: new Date().toISOString(),
     totalPlaces: allPlaces.length,
     places: allPlaces,
-  };
-  const citiesData: CitiesData = {
+  } as PlacesData);
+  saveJson(join(PROCESSED_DATA_DIR, "cities.json"), {
     generatedAt: new Date().toISOString(),
     totalCities: allCities.length,
     cities: allCities,
-  };
-  saveJson(join(PROCESSED_DATA_DIR, "places.json"), placesData);
-  saveJson(join(PROCESSED_DATA_DIR, "cities.json"), citiesData);
+  } as CitiesData);
 
   // 6. Fetch Google Places images
   console.log("\n6. Fetching Google Places images...");
@@ -284,7 +276,7 @@ async function main() {
   ) as PlacesData;
   allPlaces = updatedPlacesData.places;
 
-  // 7. Seed DB (full upsert — safe to re-run)
+  // 7. Seed DB
   console.log("\n7. Seeding Supabase...");
   await seedToSupabase(allPlaces, allCities);
 
@@ -302,15 +294,136 @@ async function main() {
     transcriptAvailable,
     placesExtracted: places.map((p) => p.id),
   });
-  console.log(`   Saved to videos.json`);
 
-  // Summary
-  console.log("\n=== Done ===");
-  console.log(`Places extracted: ${places.length}`);
+  console.log(`\n--- Done: ${video.title} ---`);
+  console.log(`Places: ${places.length}`);
   places.forEach((p, i) => {
     console.log(`  ${i + 1}. ${p.name} (${p.city}) — ${p.dishes.join(", ") || "no dishes"}`);
   });
-  console.log(`\nTotal in DB: ${allPlaces.length} places across ${allCities.length} cities`);
+
+  return true;
+}
+
+// ── Main ────────────────────────────────────────────────────────────────────
+
+async function main() {
+  const args = process.argv.slice(2);
+  const force = args.includes("--force");
+
+  // --channel <handle> [--limit <n>] mode
+  const channelIdx = args.indexOf("--channel");
+  if (channelIdx !== -1) {
+    const channelHandle = args[channelIdx + 1];
+    if (!channelHandle || channelHandle.startsWith("--")) {
+      console.error("Usage: npm run process-video --channel @handle [--limit N] [--force]");
+      process.exit(1);
+    }
+
+    const limitIdx = args.indexOf("--limit");
+    const limit = limitIdx !== -1 ? parseInt(args[limitIdx + 1], 10) : 10;
+
+    console.log(`\nChannel mode: ${channelHandle}, limit=${limit}\n`);
+
+    const ytClient = new YouTubeClient();
+    const channel = await ytClient.resolveChannelHandle(channelHandle);
+    if (!channel || !channel.uploadsPlaylistId) {
+      console.error(`Could not resolve channel: ${channelHandle}`);
+      process.exit(1);
+    }
+
+    console.log(`Channel: ${channel.title}`);
+    console.log(`Fetching latest ${limit} videos...\n`);
+
+    const videoIds: string[] = [];
+    for await (const v of ytClient.getPlaylistVideos(channel.uploadsPlaylistId, limit)) {
+      videoIds.push(v.id);
+    }
+
+    console.log(`Found ${videoIds.length} videos. Processing...\n`);
+    await runBatch(videoIds, force, "Channel run");
+    return;
+  }
+
+  // --playlist <playlistId> mode
+  const playlistIdx = args.indexOf("--playlist");
+  if (playlistIdx !== -1) {
+    const playlistId = args[playlistIdx + 1];
+    if (!playlistId || playlistId.startsWith("--")) {
+      console.error("Usage: npm run process-video --playlist <playlistId> [--limit N] [--force]");
+      process.exit(1);
+    }
+
+    const limitIdx = args.indexOf("--limit");
+    const limit = limitIdx !== -1 ? parseInt(args[limitIdx + 1], 10) : undefined;
+
+    console.log(`\nPlaylist mode: ${playlistId}${limit ? `, limit=${limit}` : ""}\n`);
+
+    const ytClient = new YouTubeClient();
+    const videoIds: string[] = [];
+    for await (const v of ytClient.getPlaylistVideos(playlistId, limit)) {
+      videoIds.push(v.id);
+    }
+
+    console.log(`Found ${videoIds.length} videos. Processing...\n`);
+    await runBatch(videoIds, force, "Playlist run");
+    return;
+  }
+
+  // Video ID(s) mode — comma-separated or single
+  const rawArg = args.find((a) => !a.startsWith("--"));
+  if (!rawArg) {
+    console.error(
+      "Usage:\n" +
+      "  npm run process-video <videoId>[,videoId2,...]  [--force]\n" +
+      "  npm run process-video --channel @handle [--limit N] [--force]\n" +
+      "  npm run process-video --playlist <playlistId> [--limit N] [--force]"
+    );
+    process.exit(1);
+  }
+
+  const videoIds = rawArg
+    .split(",")
+    .map((id) => id.trim().split("&")[0].split("?")[0])
+    .filter(Boolean);
+
+  await runBatch(videoIds, force, videoIds.length > 1 ? "Batch run" : undefined);
+}
+
+/**
+ * Process a list of video IDs, skipping on any error or unexpected scenario.
+ */
+async function runBatch(videoIds: string[], force: boolean, label?: string): Promise<void> {
+  const VIDEO_TIMEOUT_MS = 3 * 60 * 1000; // 3 min per video
+  let processed = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (let i = 0; i < videoIds.length; i++) {
+    console.log(`\n[${i + 1}/${videoIds.length}] ${videoIds[i]}`);
+    try {
+      const result = await Promise.race([
+        processOneVideo(videoIds[i], force),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), VIDEO_TIMEOUT_MS)
+        ),
+      ]);
+      result ? processed++ : skipped++;
+    } catch (err: unknown) {
+      const msg = (err as Error).message ?? String(err);
+      console.error(`  Skipping ${videoIds[i]}: ${msg.slice(0, 120)}`);
+      failed++;
+    }
+  }
+
+  if (label) {
+    const allPlaces = existsSync(join(PROCESSED_DATA_DIR, "places.json"))
+      ? (JSON.parse(readFileSync(join(PROCESSED_DATA_DIR, "places.json"), "utf-8")) as PlacesData).places
+      : [];
+    const allCities = generateCities(allPlaces);
+    console.log(`\n=== ${label} complete ===`);
+    console.log(`Processed: ${processed} | Skipped (already done): ${skipped} | Failed/timeout: ${failed}`);
+    console.log(`Total in DB: ${allPlaces.length} places across ${allCities.length} cities`);
+  }
 }
 
 main().catch((err) => {
